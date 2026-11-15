@@ -8,6 +8,29 @@ import sys
 import time
 
 TIMEOUT_SECONDS = 30
+HELPER_STEPS = {
+    "launching-helper", "loading-automation", "initializing-com",
+    "creating-word-instance", "configuring-word", "opening-document", "exporting-pdf",
+}
+ERROR_TYPES = {
+    "AttributeError", "TypeError", "ImportError", "ModuleNotFoundError",
+    "FileNotFoundError", "PermissionError", "OSError", "RuntimeError", "com_error",
+}
+
+def _error_details(error: Exception) -> dict:
+    """Capture fixed classifications, never exception messages or local paths."""
+    code = getattr(error, "hresult", None)
+    if not isinstance(code, int) or isinstance(code, bool):
+        args = getattr(error, "args", ())
+        code = args[0] if args and isinstance(args[0], int) and not isinstance(args[0], bool) else None
+    details = {
+        "code": f"0x{code & 0xffffffff:08X}" if isinstance(code, int) else "unavailable",
+        "errorType": type(error).__name__ if type(error).__name__ in ERROR_TYPES else "Exception",
+    }
+    module = getattr(error, "name", None)
+    if module in {"pythoncom", "pywintypes", "win32com", "win32com.client", "win32process", "win32api"}:
+        details["dependency"] = module
+    return details
 
 def _status(filename: Path, **data):
     temporary = filename.with_suffix(".tmp")
@@ -27,14 +50,24 @@ def run_helper(request_path: Path) -> int:
     pid = None
     owned = False
     creation_time = None
-    import pythoncom
-    pythoncom.CoInitialize()
+    pythoncom = None
+    initialized = False
+    step = "loading-automation"
     try:
+        # Imports and COM initialization can fail in packaged builds too.
+        # Record them before any Word operation rather than blaming Office.
+        _status(status, stage=stage, step=step)
+        import pythoncom
         from win32com.client import dynamic
         import win32process
         import win32api
+        step = "initializing-com"
+        _status(status, stage=stage, step=step)
+        pythoncom.CoInitialize()
+        initialized = True
         started = time.time()
-        _status(status, stage=stage)
+        step = "creating-word-instance"
+        _status(status, stage=stage, step=step)
         # Dynamic dispatch avoids broken/stale generated win32com caches.
         dispatch = pythoncom.CoCreateInstance(
             pythoncom.CLSIDFromProgID("Word.Application"), None,
@@ -50,22 +83,25 @@ def run_helper(request_path: Path) -> int:
                 handle.Close()
         except Exception:
             owned = False  # Never terminate a process whose ownership is uncertain.
+        step = "configuring-word"
+        _status(status, stage=stage, step=step, pid=pid, owned=owned, creationTime=creation_time)
         word.Visible = False
         word.DisplayAlerts = 0
         word.AutomationSecurity = 3
         stage = "opening-document"
-        _status(status, stage=stage, pid=pid, owned=owned, creationTime=creation_time)
+        step = stage
+        _status(status, stage=stage, step=step, pid=pid, owned=owned, creationTime=creation_time)
         opened = word.Documents.Open(str(source), ConfirmConversions=False,
             ReadOnly=True, AddToRecentFiles=False, UpdateLinks=0, Visible=False)
         stage = "exporting-pdf"
-        _status(status, stage=stage, pid=pid, owned=owned, creationTime=creation_time)
+        step = stage
+        _status(status, stage=stage, step=step, pid=pid, owned=owned, creationTime=creation_time)
         opened.ExportAsFixedFormat(str(target), 17, OpenAfterExport=False)
         _status(status, stage="pdf-written", pid=pid, owned=owned, creationTime=creation_time)
         return 0
     except Exception as error:
-        code = getattr(error, "hresult", None)
-        _status(status, stage=stage, pid=pid, owned=owned, creationTime=creation_time,
-                code=f"0x{code & 0xffffffff:08X}" if isinstance(code, int) else "unavailable", failed=True)
+        _status(status, stage=stage, step=step, pid=pid, owned=owned,
+                creationTime=creation_time, **_error_details(error), failed=True)
         return 1
     finally:
         if opened is not None:
@@ -79,7 +115,11 @@ def run_helper(request_path: Path) -> int:
                 word.Quit()
             except Exception:
                 pass
-        pythoncom.CoUninitialize()
+        if initialized:
+            try:
+                pythoncom.CoUninitialize()
+            except Exception:
+                pass
 
 def convert(source: Path) -> bytes:
     if sys.platform != "win32":
@@ -126,8 +166,33 @@ def convert(source: Path) -> bytes:
         if raw.startswith(b"%PDF-") and b"%%EOF" in raw[-1024:]:
             return raw
     stage = details.get("stage", "starting-word")
+    if stage not in {"starting-word", "opening-document", "exporting-pdf", "pdf-written"}:
+        stage = "starting-word"
     code = details.get("code", "unavailable")
+    if not isinstance(code, str) or len(code) != 10 or not code.startswith("0x") or any(c not in "0123456789ABCDEF" for c in code[2:]):
+        code = "unavailable"
+    step = details.get("step")
+    if step not in HELPER_STEPS:
+        step = "launching-helper" if not details else stage
+    error_type = details.get("errorType")
+    safe_details = f" Helper step: {step}."
+    if error_type in ERROR_TYPES or error_type == "Exception":
+        safe_details += f" Failure type: {error_type}."
+    dependency = details.get("dependency")
+    if dependency in {"pythoncom", "pywintypes", "win32com", "win32com.client", "win32process", "win32api"}:
+        safe_details += f" Missing component: {dependency}."
+    exit_code = getattr(process, "returncode", None)
+    if isinstance(exit_code, int):
+        safe_details += f" Helper exit: {exit_code}."
+    if step == "loading-automation" or error_type in {"ImportError", "ModuleNotFoundError"}:
+        advice = ("Recordly could not load its Word automation components. Reinstall the latest Recordly build "
+                  "and share diagnostics if it continues; this does not establish an Office installation problem.")
+    elif not details:
+        advice = ("The PDF helper exited before reporting its progress. Share Recordly diagnostics "
+                  "and the installed app version; this does not establish an Office installation problem.")
+    else:
+        advice = ("Open desktop Word manually, finish activation or any dialogs, then retry PDF export. "
+                  "If Word opens normally but export still fails, share Recordly diagnostics before repairing Office.")
     reason = "timed out after 30 seconds" if timed_out else "failed"
     raise ValueError(f"Microsoft Word PDF export {reason} during {stage} (Office code: {code}). "
-                     "The DOCX was retained. Open Word manually, finish activation or any dialogs, "
-                     "then retry PDF export. If it still fails, repair Microsoft Office.")
+                     f"The DOCX was retained.{safe_details} {advice}")
