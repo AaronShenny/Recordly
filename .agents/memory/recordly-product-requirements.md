@@ -44,3 +44,15 @@ The user approved making Recordly open-source to pursue free open-source Windows
 **Why:** After reviewing the source-sharing implications and SignPath conditions, the user selected “Yes, make it open-source”.
 
 **How to apply:** Prepare public application source and signing-policy documentation, but protect credentials, student material and private history. Do not equate open-source consent with SignPath acceptance or approval to publish a production release. Retain the working PyMuPDF engine using AGPL compliance rather than silently replacing it to claim permissive-only licensing.
+
+Updates should be received and installed from inside Recordly, with downloads
+started according to priority. For high-priority updates, the user specified
+“it would download before opening the screens.”
+
+**Why:** The user requested priority-based in-app updating rather than relying
+on students to download replacement installers manually.
+
+**How to apply:** Distinguish ordinary startup from high-priority update startup.
+Do not interpret the download requirement as permission to discard pending work,
+bypass Drive acknowledgment, weaken signature verification, or assume what should
+happen when a required download is unavailable.
