@@ -30,3 +30,15 @@ test("Word diagnostics preserve COM codes and reject arbitrary classification te
   ));
   assert.deepEqual(unsafe, { category: "word-or-pdf" });
 });
+
+test("Windows automation diagnostics retain the backend and safe ownership failure", () => {
+  assert.deepEqual(diagnosticError(new Error(
+    "Microsoft Word PDF export failed during starting-word (Office code: 0x80131509). " +
+    "Helper step: checking-word-process. Automation backend: powershell-word. " +
+    "Failure type: WordOwnershipUncertain. Helper exit: 1. private-student-path",
+  )), {
+    category: "word-or-pdf", officeCode: "0x80131509", officeStage: "starting-word",
+    officeStep: "checking-word-process", officeFailureType: "WordOwnershipUncertain",
+    officeBackend: "powershell-word", officeHelperExit: 1,
+  });
+});

@@ -104,6 +104,15 @@ if (feed) {
   } }));
   args.splice(args.indexOf("--"), 0, "--config", override);
 }
+const wordHelper = spawnSync(path.join(resources, "python/record-maker-worker.exe"), ["--check-word-automation"], {
+  encoding: "utf8", shell: false, timeout: 35_000, windowsHide: true,
+});
+let wordHelperResponse;
+try { wordHelperResponse = JSON.parse(wordHelper.stdout?.trim() || ""); } catch { /* Do not print helper stderr or paths. */ }
+if (wordHelper.error || wordHelper.status !== 0 || wordHelperResponse?.status !== "ready" ||
+    wordHelperResponse?.backend !== "powershell-word" || wordHelperResponse?.wordStarted !== false) {
+  throw new Error("The packaged Windows Word-automation helper failed its smoke check. No Office installation is required for this check.");
+}
 // Authenticode signing must be configured separately by the owner; unsigned
 // trial installers do not claim release/update readiness.
 run(process.execPath, args, path.join(root, "tauri"));

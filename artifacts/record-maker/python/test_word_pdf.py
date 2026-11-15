@@ -102,6 +102,7 @@ class WordPdfTests(unittest.TestCase):
                 returncode = 0
                 def wait(self, timeout=None):
                     source.with_suffix(".pdf").write_bytes(b"%PDF-1.4 fixture\n%%EOF")
+                    source.with_suffix(".word-request.status.json").write_text(json.dumps({"stage": "pdf-written"}))
                     return 0
             with patch.object(word_pdf.sys, "platform", "win32"), patch.object(word_pdf.subprocess, "Popen", return_value=Process()):
                 self.assertEqual(word_pdf.convert(source), b"%PDF-1.4 fixture\n%%EOF")
@@ -117,8 +118,11 @@ class WordPdfTests(unittest.TestCase):
             class Process:
                 killed = False
                 def wait(self, timeout=None):
-                    if timeout is not None:
+                    if timeout is not None and not self.killed:
                         self.timeout = timeout
+                        source.with_suffix(".word-request.status.json").write_text(json.dumps({
+                            "stage": "opening-document", "pid": 123, "owned": False,
+                        }))
                         raise subprocess.TimeoutExpired("fixture", timeout)
                     return 0
                 def kill(self):
@@ -141,6 +145,9 @@ class WordPdfTests(unittest.TestCase):
             }))
             class Process:
                 def wait(self, timeout=None):
+                    source.with_suffix(".word-request.status.json").write_text(json.dumps({
+                        "stage": "starting-word", "failed": True, "code": "0x80080005",
+                    }))
                     return 1
             with patch.object(word_pdf.sys, "platform", "win32"), patch.object(word_pdf.subprocess, "Popen", return_value=Process()):
                 with self.assertRaisesRegex(ValueError, "starting-word.*0x80080005"):

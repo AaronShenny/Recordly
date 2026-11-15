@@ -15,13 +15,15 @@ export function diagnosticError(error: unknown): Record<string, string | number>
   const status = /\bDrive request failed \((\d{3})\)/.exec(text)?.[1];
   const officeCode = /Office code: (0x[0-9A-F]{8})/.exec(text)?.[1];
   const officeStage = /during (starting-word|opening-document|exporting-pdf)/.exec(text)?.[1];
-  const officeStep = /Helper step: (launching-helper|loading-automation|initializing-com|creating-word-instance|configuring-word|opening-document|exporting-pdf)\./.exec(text)?.[1];
-  const officeFailureType = /Failure type: (AttributeError|TypeError|ImportError|ModuleNotFoundError|FileNotFoundError|PermissionError|OSError|RuntimeError|com_error|Exception)\./.exec(text)?.[1];
+  const officeStep = /Helper step: (launching-helper|loading-automation|initializing-com|creating-word-instance|checking-word-process|configuring-word|opening-document|exporting-pdf)\./.exec(text)?.[1];
+  const officeFailureType = /Failure type: (AttributeError|TypeError|ImportError|ModuleNotFoundError|FileNotFoundError|PermissionError|OSError|RuntimeError|com_error|COMException|InvalidOperationException|ArgumentException|IOException|FileNotFoundException|DirectoryNotFoundException|UnauthorizedAccessException|NotSupportedException|RuntimeException|WordOwnershipUncertain|Exception)\./.exec(text)?.[1];
+  const officeBackend = /Automation backend: (powershell-word)\./.exec(text)?.[1];
   const officeDependency = /Missing component: (pythoncom|pywintypes|win32com\.client|win32com|win32process|win32api)\./.exec(text)?.[1];
   const helperExit = /Helper exit: (-?\d{1,10})\./.exec(text)?.[1];
   return { category, ...(code ? { code } : {}), ...(status ? { httpStatus: Number(status) } : {}),
     ...(officeCode ? { officeCode } : {}), ...(officeStage ? { officeStage } : {}),
     ...(officeStep ? { officeStep } : {}), ...(officeFailureType ? { officeFailureType } : {}),
+    ...(officeBackend ? { officeBackend } : {}),
     ...(officeDependency ? { officeDependency } : {}),
     ...(helperExit ? { officeHelperExit: Number(helperExit) } : {}) };
 }

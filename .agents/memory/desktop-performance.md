@@ -61,3 +61,14 @@ Treat DOCX creation, Office opening, and Word PDF automation as separate operati
 **Why:** An installed session returned a usable DOCX alongside a slow failed PDF attempt, then failed separately while opening through COM. The user clarified that Word opening and PDF export were problems; a DOCX being produced is not confirmation that the document workflow is correct.
 
 **How to apply:** Preserve the DOCX before invoking Office, make PDF failure recoverable without regenerating it, and do not terminate a student's existing Word session. Do not claim Office activation/installation issues or native Windows performance are fixed based on mocked or Linux checks.
+
+An independent Windows PowerShell Word-activation check succeeded on a machine
+where the installed app's PDF export failed before document opening.
+
+**Why:** A successful normal Word launch and standalone COM activation contradict
+blanket claims that Office needs activation or repair. They do not prove document
+opening, PDF rendering, or the app's packaged automation layer works.
+
+**How to apply:** Separate those checks when diagnosing Office failures. Preserve
+the distinction between a confirmed API/reporting defect, a suspected app-specific
+cause, and a PDF export actually verified in the installed Windows application.

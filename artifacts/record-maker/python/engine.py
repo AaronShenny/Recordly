@@ -179,14 +179,21 @@ def handle(action, payload):
         import pythoncom
         import win32com.client
         pythoncom.CoInitialize()
+        previous_links = None
+        word = None
         try:
             word = win32com.client.Dispatch("Word.Application")
             word.AutomationSecurity = 3
             word.Visible = True
-            word.Documents.Open(str(Path(payload["filename"]).resolve()), UpdateLinks=0, AddToRecentFiles=False)
+            previous_links = word.Options.UpdateLinksAtOpen
+            word.Options.UpdateLinksAtOpen = False
+            word.Documents.Open(str(Path(payload["filename"]).resolve()), AddToRecentFiles=False)
         except Exception as error:
             raise ValueError("Microsoft Word could not open this document. Check desktop Word installation and activation.") from error
         finally:
+            if word is not None and previous_links is not None:
+                try: word.Options.UpdateLinksAtOpen = previous_links
+                except Exception: pass
             pythoncom.CoUninitialize()
         return {"opened": True}
     if action == "inspect-template":

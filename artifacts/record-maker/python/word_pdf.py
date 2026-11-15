@@ -6,15 +6,19 @@ from pathlib import Path
 import subprocess
 import sys
 import time
+from word_pdf_windows import launch, terminate_owned_word
 
 TIMEOUT_SECONDS = 30
 HELPER_STEPS = {
     "launching-helper", "loading-automation", "initializing-com",
-    "creating-word-instance", "configuring-word", "opening-document", "exporting-pdf",
+    "creating-word-instance", "checking-word-process", "configuring-word", "opening-document", "exporting-pdf",
 }
 ERROR_TYPES = {
     "AttributeError", "TypeError", "ImportError", "ModuleNotFoundError",
     "FileNotFoundError", "PermissionError", "OSError", "RuntimeError", "com_error",
+    "COMException", "InvalidOperationException", "ArgumentException", "IOException",
+    "FileNotFoundException", "DirectoryNotFoundException", "UnauthorizedAccessException",
+    "NotSupportedException", "RuntimeException", "WordOwnershipUncertain",
 }
 
 def _error_details(error: Exception) -> dict:
@@ -38,6 +42,7 @@ def _status(filename: Path, **data):
     temporary.replace(filename)
 
 def run_helper(request_path: Path) -> int:
+    """Legacy comparison CLI; normal PDF exports use the Windows helper."""
     request_path = request_path.resolve()
     data = json.loads(request_path.read_text(encoding="utf-8"))
     source = Path(data["source"]).resolve()
@@ -50,6 +55,7 @@ def run_helper(request_path: Path) -> int:
     pid = None
     owned = False
     creation_time = None
+    previous_links = None
     pythoncom = None
     initialized = False
     step = "loading-automation"
@@ -73,8 +79,21 @@ def run_helper(request_path: Path) -> int:
             pythoncom.CLSIDFromProgID("Word.Application"), None,
             pythoncom.CLSCTX_LOCAL_SERVER, pythoncom.IID_IDispatch)
         word = dynamic.Dispatch(dispatch)
+        step = "configuring-word"
+        _status(status, stage=stage, step=step, pid=pid, owned=owned, creationTime=creation_time)
+        word.Visible = False
+        word.DisplayAlerts = 0
+        word.AutomationSecurity = 3
+        previous_links = word.Options.UpdateLinksAtOpen
+        word.Options.UpdateLinksAtOpen = False
+        stage = "opening-document"
+        step = stage
+        _status(status, stage=stage, step=step, pid=pid, owned=owned, creationTime=creation_time)
+        opened = word.Documents.Open(str(source), ConfirmConversions=False,
+            ReadOnly=True, AddToRecentFiles=False, Visible=False)
         try:
-            pid = win32process.GetWindowThreadProcessId(word.Hwnd)[1]
+            # Word exposes Hwnd on its document Window, not Application.
+            pid = win32process.GetWindowThreadProcessId(opened.Windows.Item(1).Hwnd)[1]
             handle = win32api.OpenProcess(0x0400, False, pid)
             try:
                 creation_time = win32process.GetProcessTimes(handle)["CreationTime"].timestamp()
@@ -83,16 +102,6 @@ def run_helper(request_path: Path) -> int:
                 handle.Close()
         except Exception:
             owned = False  # Never terminate a process whose ownership is uncertain.
-        step = "configuring-word"
-        _status(status, stage=stage, step=step, pid=pid, owned=owned, creationTime=creation_time)
-        word.Visible = False
-        word.DisplayAlerts = 0
-        word.AutomationSecurity = 3
-        stage = "opening-document"
-        step = stage
-        _status(status, stage=stage, step=step, pid=pid, owned=owned, creationTime=creation_time)
-        opened = word.Documents.Open(str(source), ConfirmConversions=False,
-            ReadOnly=True, AddToRecentFiles=False, UpdateLinks=0, Visible=False)
         stage = "exporting-pdf"
         step = stage
         _status(status, stage=stage, step=step, pid=pid, owned=owned, creationTime=creation_time)
@@ -110,6 +119,11 @@ def run_helper(request_path: Path) -> int:
             except Exception:
                 pass
         # Only close a Word process demonstrably created for this helper.
+        if word is not None and previous_links is not None:
+            try:
+                word.Options.UpdateLinksAtOpen = previous_links
+            except Exception:
+                pass
         if word is not None and owned:
             try:
                 word.Quit()
@@ -129,39 +143,37 @@ def convert(source: Path) -> bytes:
     request = source.with_suffix(".word-request.json")
     status = request.with_suffix(".status.json")
     request.write_text(json.dumps({"source": str(source), "target": str(target)}), encoding="utf-8")
-    command = [sys.executable]
-    if not getattr(sys, "frozen", False):
-        command.append(str(Path(__file__).with_name("worker.py")))
-    command += ["--word-pdf", str(request)]
-    process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    target.unlink(missing_ok=True)
+    _status(status, stage="starting-word", step="launching-helper", backend="powershell-word")
+    process = None
     timed_out = False
     try:
-        process.wait(timeout=TIMEOUT_SECONDS)
-    except subprocess.TimeoutExpired:
-        timed_out = True
-        process.kill()
-        process.wait()
+        process = launch(request)
+    except OSError as error:
+        _status(status, stage="starting-word", step="launching-helper",
+                backend="powershell-word", failed=True, **_error_details(error))
+    if process is not None:
+        try:
+            process.wait(timeout=TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            try:
+                process.kill()
+            except OSError:
+                pass
+            try:
+                process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                pass
     try:
         details = json.loads(status.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         details = {}
-    if timed_out and details.get("owned") and isinstance(details.get("pid"), int):
-        # Never taskkill all Word processes or the user's pre-existing Word.
-        try:
-            import win32api
-            import win32process
-            handle = win32api.OpenProcess(0x0400, False, details["pid"])
-            try:
-                same_process = win32process.GetProcessTimes(handle)["CreationTime"].timestamp() == details.get("creationTime")
-            finally:
-                handle.Close()
-            if same_process:
-                subprocess.run(["taskkill", "/PID", str(details["pid"]), "/T", "/F"],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3, check=False)
-        except Exception:
-            pass
-    if target.exists() and not details.get("failed"):
+    if not isinstance(details, dict):
+        details = {}
+    if timed_out:
+        terminate_owned_word(details)
+    if target.exists() and details.get("stage") == "pdf-written" and not details.get("failed"):
         raw = target.read_bytes()
         if raw.startswith(b"%PDF-") and b"%%EOF" in raw[-1024:]:
             return raw
@@ -176,6 +188,8 @@ def convert(source: Path) -> bytes:
         step = "launching-helper" if not details else stage
     error_type = details.get("errorType")
     safe_details = f" Helper step: {step}."
+    if details.get("backend") == "powershell-word":
+        safe_details += " Automation backend: powershell-word."
     if error_type in ERROR_TYPES or error_type == "Exception":
         safe_details += f" Failure type: {error_type}."
     dependency = details.get("dependency")
@@ -187,9 +201,15 @@ def convert(source: Path) -> bytes:
     if step == "loading-automation" or error_type in {"ImportError", "ModuleNotFoundError"}:
         advice = ("Recordly could not load its Word automation components. Reinstall the latest Recordly build "
                   "and share diagnostics if it continues; this does not establish an Office installation problem.")
-    elif not details:
+    elif process is None:
+        advice = ("Recordly could not start its Windows automation helper. Share Recordly diagnostics "
+                  "and the installed app version; this does not establish an Office installation problem.")
+    elif not details or step == "launching-helper":
         advice = ("The PDF helper exited before reporting its progress. Share Recordly diagnostics "
                   "and the installed app version; this does not establish an Office installation problem.")
+    elif error_type == "WordOwnershipUncertain":
+        advice = ("Recordly did not modify or close Word because instance ownership was uncertain. "
+                  "Save and close Word, retry PDF export, then share diagnostics if it continues.")
     else:
         advice = ("Open desktop Word manually, finish activation or any dialogs, then retry PDF export. "
                   "If Word opens normally but export still fails, share Recordly diagnostics before repairing Office.")

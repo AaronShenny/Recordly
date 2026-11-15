@@ -65,6 +65,9 @@ def handle(request: dict, workspace_root: Path) -> dict:
             "snapshot": snapshot.name, "note": "Snapshot inspected only. No document generated and no student code executed."}
 
 def main() -> int:
+    if len(sys.argv) == 2 and sys.argv[1] == "--check-word-automation":
+        from word_pdf_windows import check_automation
+        return check_automation()
     if len(sys.argv) == 3 and sys.argv[1] == "--word-pdf":
         from word_pdf import run_helper
         return run_helper(Path(sys.argv[2]))
