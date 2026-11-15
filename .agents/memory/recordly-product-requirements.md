@@ -54,5 +54,13 @@ on students to download replacement installers manually.
 
 **How to apply:** Distinguish ordinary startup from high-priority update startup.
 Do not interpret the download requirement as permission to discard pending work,
-bypass Drive acknowledgment, weaken signature verification, or assume what should
-happen when a required download is unavailable.
+bypass Drive acknowledgment, or weaken signature verification.
+
+If a known required update cannot download, allow **read-only recovery**.
+
+**Why:** The user selected “Read-only recovery (recommended)” when asked what
+should happen if a required update cannot download.
+
+**How to apply:** Keep recovery access distinct from normal editing when a
+required update is unavailable. This exception does not make every ordinary
+offline launch read-only or authorize deleting cached work.
