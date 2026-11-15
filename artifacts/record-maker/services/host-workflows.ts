@@ -102,8 +102,10 @@ export class HostWorkflows {
         .then(() => this.diagnostics.record("updates-initialized", { durationMs: Math.round(performance.now() - started) }))
         .catch(() => this.diagnostics.record("updates-initialization-failed"));
     };
-    this.updateTimer = setTimeout(check, 60_000).unref();
-    this.updateInterval = setInterval(check, 6 * 60 * 60_000).unref();
+    // Native startup already checked metadata before record screens. Once the
+    // desk paints, download normal releases without delaying local records.
+    this.updateTimer = setTimeout(check, 5_000).unref();
+    this.updateInterval = setInterval(check, 15 * 60_000).unref();
   }
   async close() {
     clearInterval(this.syncTimer); clearTimeout(this.updateTimer); clearInterval(this.updateInterval);

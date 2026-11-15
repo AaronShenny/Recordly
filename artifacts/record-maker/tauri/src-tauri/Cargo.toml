@@ -1,6 +1,6 @@
 [package]
 name = "record-maker-native"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 rust-version = "1.88"
 license = "AGPL-3.0-or-later"
@@ -12,9 +12,10 @@ serde_json = "1"
 # The Windows Tauri application/toolchain will require Rust 1.90 or newer.
 uuid = { version = "=1.18.1", features = ["v4"] }
 sha2 = "0.10"
+base64 = "0.22"
+minisign-verify = "=0.3.0"
 
 [target.'cfg(windows)'.dependencies]
-base64 = "0.22"
 tauri = { version = "2", optional = true }
 tauri-plugin-updater = { version = "2", optional = true }
 rfd = { version = "0.18", optional = true, default-features = false, features = ["common-controls-v6"] }

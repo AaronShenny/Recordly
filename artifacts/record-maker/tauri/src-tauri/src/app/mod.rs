@@ -15,6 +15,7 @@ struct State {
     start_guard: Mutex<()>,
     instance_lock: Mutex<Option<fs::File>>,
     updates: Mutex<updates::Updates>,
+    update_progress: Arc<Mutex<Value>>,
     editing: Mutex<(u64, bool)>,
     active: AtomicUsize,
     closing: AtomicBool,
@@ -54,7 +55,7 @@ impl State {
             let state = native_state.upgrade().ok_or("Native app is closing.")?;
             if action == "updates-initialize" || action == "updates-check" {
                 return state.updates.try_lock().map_err(|_| "An update check is already running.")?
-                    .check(&native_app, &state.resources, &state.data()?);
+                    .check(&native_app, &state.resources, &state.base.join("updates"));
             }
             if action == "updates-restart" {
                 if state.editing.lock().unwrap().1 { return Err("Save your edits and finish draft fields before restarting.".into()); }
@@ -95,6 +96,31 @@ async fn desktop_request(window: tauri::WebviewWindow, state: tauri::State<'_, A
         if method == "cancel-close" {
             if !state.closing.load(Ordering::SeqCst) { state.close_requested.store(false, Ordering::SeqCst); }
             return Ok(Value::Null);
+        }
+        // Updater-only work owns no student mutations. Polling must remain
+        // responsive while the updater mutex is occupied by network work.
+        if method == "updates-status" {
+            return state.update_progress.lock().map(|v| v.clone()).map_err(|_| "Update progress is unavailable.".into());
+        }
+        if method == "updates-startup" || method == "updates-download" {
+            if state.closing.load(Ordering::SeqCst) { return Err("Recordly is closing.".into()); }
+            {
+                let _guard = state.start_guard.lock().map_err(|_| "Update startup is unavailable.")?;
+                if state.instance_lock.lock().map_err(|_| "Instance ownership is unavailable.")?.is_none() {
+                    *state.instance_lock.lock().unwrap() = Some(startup::lock(&state.base)?);
+                }
+            }
+            let update_started = Instant::now();
+            state.log("update-operation-start", json!({"operation":method}));
+            let mut updates = state.updates.try_lock().map_err(|_| "An update check is already running.")?;
+            let cache = state.base.join("updates");
+            let result = if method == "updates-startup" {
+                updates.prepare(&app, &state.resources, &cache)
+            } else { updates.check(&app, &state.resources, &cache) };
+            let value = result.unwrap_or_else(|_| updates.failure("The update service could not be reached or verified."));
+            state.log("update-stage", json!({"operation":method,"stage":value["state"],"priority":value["priority"],
+                "version":value["version"],"durationMs":update_started.elapsed().as_millis()}));
+            return Ok(value);
         }
         if method == "close-commit" {
             if state.closing.swap(true, Ordering::SeqCst) { return Err("Closing is already running.".into()); }
@@ -142,6 +168,40 @@ async fn desktop_request(window: tauri::WebviewWindow, state: tauri::State<'_, A
             state.log("native-cache-open", json!({}));
             return startup::boot_cache(&data);
         }
+        if method == "updates-install-startup" {
+            if let Ok(mut progress) = state.update_progress.lock() {
+                progress["state"] = json!("installing");
+                progress["message"] = json!("Checking saved work and Drive synchronization before installation…");
+            }
+            let result = (|| {
+            if state.editing.lock().map_err(|_| "Editing state is unavailable.")?.1 ||
+                state.active.load(Ordering::SeqCst) > 1 {
+                return Err("Finish saving other operations before installing the update.".into());
+            }
+            let data = state.data()?;
+            let has_workspace = match fs::read_dir(data.join("workspaces")) {
+                Ok(mut entries) => entries.next().transpose().map_err(|_| "Could not verify existing workspace safety.")?.is_some(),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+                Err(_) => return Err("Could not verify existing workspace safety.".into()),
+            };
+            if has_workspace || data.join("credentials/google-session.bin").exists() {
+                // Existing accounts use exactly the same Drive-acknowledged
+                // restart path as Settings. Never install around pending edits.
+                let service = state.service(app)?;
+                service.request("workflow", json!({"action":"check-updates","input":{}}), Duration::from_secs(900))?;
+                return service.request("workflow", json!({"action":"restart-update","input":{}}), Duration::from_secs(900));
+            }
+            // Fresh installation: no accounts, workspaces or editable session
+            // exist, so there is nothing to upload or discard.
+            state.updates.lock().map_err(|_| "Update state is unavailable.")?.install()
+            })();
+            if result.is_err() {
+                if let Ok(updates) = state.updates.try_lock() {
+                    updates.failure("The update could not be installed safely. Finish saving or syncing, then retry.");
+                }
+            }
+            return result;
+        }
         if method == "edit-state" {
             let dirty = payload["dirty"].as_bool().ok_or("Invalid editing state.")?;
             let sequence = payload["sequence"].as_u64().ok_or("Invalid editing sequence.")?;
@@ -171,9 +231,11 @@ pub fn run() {
         .setup(move |app| {
             let base = app.path().app_data_dir()?;
             let resources = app.path().resource_dir()?.join("runtime");
+            let update_progress = Arc::new(Mutex::new(json!({"state":"idle","priority":"normal"})));
             let state = Arc::new(State {
                 base, resources, data: Mutex::new(None), service: Mutex::new(None), start_guard: Mutex::new(()),
-                instance_lock: Mutex::new(None), updates: Mutex::new(updates::Updates::default()),
+                instance_lock: Mutex::new(None), updates: Mutex::new(updates::Updates::new(update_progress.clone())),
+                update_progress,
                 editing: Mutex::new((0, false)), active: AtomicUsize::new(0), closing: AtomicBool::new(false), close_requested: AtomicBool::new(false),
                 started, log_lock: Mutex::new(()),
             });

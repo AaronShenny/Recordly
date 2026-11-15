@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
-import { appRoot, workspaceRoot, versionOf, manifest } from "./config.mjs";
+import { appRoot, workspaceRoot, versionOf, manifest, priorityPolicy, updatePriority } from "./config.mjs";
 import { verifyUpdate } from "./verify-update.mjs";
 
 const version = versionOf();
@@ -21,6 +21,7 @@ const verify = files => run("powershell.exe", [
 const verifyEach = files => files.forEach(file => verify([file]));
 const target = path.join(appRoot, "tauri/src-tauri/target/release");
 const filename = `Recordly-${version}-x64-setup.exe`;
+const updateFilename = `Recordly-${version}-x64-update.exe`;
 if (mode === "bundle") {
   const signed = path.join(appRoot, "dist/signpath-binaries-signed");
   const app = path.join(signed, "college-record-maker.exe");
@@ -31,25 +32,34 @@ if (mode === "bundle") {
   const before = createHash("sha256").update(fs.readFileSync(app)).digest("hex");
   // Rebuilding or Tauri's normal bundle-type patching would invalidate the
   // signature. A single NSIS bundle needs no bundle-type multiplexing.
-  run(process.execPath, [cli, "bundle", "--ci", "--features", "desktop,custom-protocol",
-    "--bundles", "nsis", "--no-sign", "--no-binary-patching"], path.join(appRoot, "tauri"));
-  if (createHash("sha256").update(fs.readFileSync(path.join(target, "college-record-maker.exe"))).digest("hex") !== before) {
-    throw new Error("Bundling changed the already-signed executable.");
-  }
-  const installers = fs.readdirSync(path.join(target, "bundle/nsis")).filter(f => f.endsWith(".exe"));
-  if (installers.length !== 1) throw new Error("Expected one freshly-built NSIS installer.");
   const input = path.join(appRoot, "dist/signpath-installer-input");
+  fs.rmSync(input, { recursive: true, force: true });
   fs.mkdirSync(input, { recursive: true });
-  fs.copyFileSync(path.join(target, "bundle/nsis", installers[0]), path.join(input, filename));
+  // Keep a full offline first-install/recovery package, but do not download the
+  // offline WebView2 runtime with every small application update.
+  for (const [name, type] of [[filename, "offlineInstaller"], [updateFilename, "embedBootstrapper"]]) {
+    const override = path.join(appRoot, "dist/release-bundle.json");
+    fs.writeFileSync(override, JSON.stringify({ bundle: { windows: { webviewInstallMode: { type, silent: true } } } }));
+    fs.rmSync(path.join(target, "bundle/nsis"), { recursive: true, force: true });
+    run(process.execPath, [cli, "bundle", "--ci", "--features", "desktop,custom-protocol",
+      "--bundles", "nsis", "--no-sign", "--no-binary-patching", "--config", override], path.join(appRoot, "tauri"));
+    if (createHash("sha256").update(fs.readFileSync(path.join(target, "college-record-maker.exe"))).digest("hex") !== before) {
+      throw new Error("Bundling changed the already-signed executable.");
+    }
+    const installers = fs.readdirSync(path.join(target, "bundle/nsis")).filter(f => f.endsWith(".exe"));
+    if (installers.length !== 1) throw new Error("Expected one freshly-built NSIS installer per variant.");
+    fs.copyFileSync(path.join(target, "bundle/nsis", installers[0]), path.join(input, name));
+  }
 } else if (mode === "finalize") {
   if (!process.env.TAURI_SIGNING_PRIVATE_KEY) throw new Error("The Tauri signing key must be provided securely by CI.");
-  const installer = path.join(appRoot, "dist/signpath-installer-signed", filename);
-  verifyEach([installer]);
+  const signed = path.join(appRoot, "dist/signpath-installer-signed");
+  verifyEach([path.join(signed, filename), path.join(signed, updateFilename)]);
   const output = path.join(workspaceRoot, "generated-artifacts/recordly-release");
   fs.rmSync(output, { recursive: true, force: true });
   fs.mkdirSync(output, { recursive: true });
-  const final = path.join(output, filename);
-  fs.copyFileSync(installer, final);
+  fs.copyFileSync(path.join(signed, filename), path.join(output, filename));
+  const final = path.join(output, updateFilename);
+  fs.copyFileSync(path.join(signed, updateFilename), final);
   const hash = createHash("sha256").update(fs.readFileSync(final)).digest("hex");
   // Windows Authenticode must be applied BEFORE the separate Tauri signature.
   run(process.execPath, [cli, "signer", "sign", "--app-version", version, final]);
@@ -58,7 +68,16 @@ if (mode === "bundle") {
   }
   const signature = fs.readFileSync(`${final}.sig`, "utf8");
   verifyUpdate(fs.readFileSync(final), process.env.RECORD_MAKER_TAURI_PUBLIC_KEY, signature, version);
-  const json = manifest({ version, repo: process.env.GITHUB_REPOSITORY, filename, signature });
+  const json = manifest({ version, repo: process.env.GITHUB_REPOSITORY, filename: updateFilename, signature });
+  const policyFile = path.join(output, "priority.json");
+  fs.writeFileSync(policyFile, JSON.stringify(priorityPolicy(json, updatePriority(process.env.RECORDLY_UPDATE_PRIORITY || "normal"))));
+  // Authenticate urgency and bind it to the exact version, URL and installer
+  // signature; HTTPS alone does not authenticate additional manifest fields.
+  run(process.execPath, [cli, "signer", "sign", "--app-version", version, policyFile]);
+  const policyBytes = fs.readFileSync(policyFile);
+  const policySignature = fs.readFileSync(`${policyFile}.sig`, "utf8");
+  verifyUpdate(policyBytes, process.env.RECORD_MAKER_TAURI_PUBLIC_KEY, policySignature, version);
+  json.recordly = { payload: policyBytes.toString("base64"), signature: policySignature.trim() };
   fs.writeFileSync(path.join(output, "latest.json"), JSON.stringify(json, null, 2) + "\n");
   const source = `Recordly-${version}-source.tar.gz`;
   run("git", ["archive", "--format=tar.gz", "--output", path.join(output, source), "HEAD"], workspaceRoot);

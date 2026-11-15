@@ -1,12 +1,14 @@
 import "./index.css";
 import "./app.css";
 import { installTauriBridge } from "./lib/tauri-bridge";
+import { startupUpdateScreen } from "./lib/update-startup-screen";
 
 async function start() {
   const root = document.getElementById("root")!;
   root.textContent = "Opening Recordly…";
   root.setAttribute("role", "status");
   try {
+    if (await startupUpdateScreen(root)) return;
     await installTauriBridge();
     root.removeAttribute("role");
     await import("./main");

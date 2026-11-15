@@ -56,11 +56,21 @@ on students to download replacement installers manually.
 Do not interpret the download requirement as permission to discard pending work,
 bypass Drive acknowledgment, or weaken signature verification.
 
-If a known required update cannot download, allow **read-only recovery**.
+If a required update is unavailable, inform the user, retry downloading, and if
+it keeps failing show the configured support contact and **let the user continue
+their work**. Do not put them in read-only recovery.
 
-**Why:** The user selected “Read-only recovery (recommended)” when asked what
-should happen if a required update cannot download.
+**Why:** The user explicitly corrected the earlier read-only choice and asked
+that students be allowed to continue working after repeated download failures.
 
-**How to apply:** Keep recovery access distinct from normal editing when a
-required update is unavailable. This exception does not make every ordinary
-offline launch read-only or authorize deleting cached work.
+**How to apply:** Use bounded retries, visible failure/support information and
+fail-open editing, never installation of unverified bytes. Keep normal offline
+work and pending local data intact.
+
+Install Recordly updates from GitHub Releases using the Tauri updater.
+
+**Why:** The user approved the Tauri approach and explicitly reiterated
+“remember we install update from the github releases.”
+
+**How to apply:** Keep production feeds and installers bound to the configured
+GitHub repository's Releases, not temporary build artifacts or student Drive.

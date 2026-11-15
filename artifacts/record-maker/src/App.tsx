@@ -18,6 +18,7 @@ import { syncDrive } from "@/lib/workflow-api";
 import { CloudPanel } from "@/components/cloud-panel";
 import { errMsg } from "@/hooks/use-workspace";
 import { StartupDashboard } from "@/components/startup-dashboard";
+import { DesktopUpdates } from "@/components/desktop-updates";
 
 function InitialDriveError() {
   const { cloud, reload, refreshCloud } = useStore();
@@ -100,7 +101,7 @@ function Routes() {
 }
 
 function App() {
-  return <WorkspaceProvider><Routes /></WorkspaceProvider>;
+  return <WorkspaceProvider><DesktopUpdates /><Routes /></WorkspaceProvider>;
 }
 
 export default App;

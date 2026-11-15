@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { manifest, repository, feedFor, releaseConfiguration, versionOf } from "./config.mjs";
+import { manifest, repository, feedFor, releaseConfiguration, versionOf, githubFeed, updatePriority, priorityPolicy } from "./config.mjs";
 
 test("release feed is public HTTPS and rejects malformed repository paths", () => {
   assert.equal(feedFor("owner/Recordly"), "https://github.com/owner/Recordly/releases/latest/download/latest.json");
@@ -21,6 +21,28 @@ test("update-enabled configuration requires all verification inputs", () => {
   }
   assert.throws(() => releaseConfiguration({ ...valid, RECORD_MAKER_TAURI_PUBLIC_KEY: "" }));
   assert.throws(() => releaseConfiguration({ ...valid, RECORD_MAKER_PUBLISHER_NAME: "" }));
+});
+test("production feeds cannot escape GitHub Releases to arbitrary hosts, artifacts or credentials", () => {
+  assert.equal(githubFeed(feedFor("o/r")), feedFor("o/r"));
+  for (const url of ["https://example.com/latest.json", "https://github.com/o/r/actions/artifacts/12",
+    "https://github.com.evil/o/r/releases/latest/download/latest.json",
+    `${feedFor("o/r")}?token=secret`, "https://user@github.com/o/r/releases/latest/download/latest.json"]) {
+    assert.throws(() => githubFeed(url));
+  }
+});
+test("release priority is explicit and binds the small installer version, URL and signature", () => {
+  const release = { version: "0.3.1", platforms: { "windows-x86_64": {
+    url: "https://github.com/o/r/releases/download/v0.3.1/Recordly-0.3.1-x64-update.exe", signature: "signed installer" } } };
+  assert.equal(updatePriority(), "normal");
+  assert.equal(updatePriority("high"), "high");
+  for (const value of ["critical", "", "HIGH", "../high"]) assert.throws(() => updatePriority(value));
+  assert.deepEqual(priorityPolicy(release, "high"), { schemaVersion: 1, version: "0.3.1", priority: "high",
+    installerUrl: release.platforms["windows-x86_64"].url, installerSignature: "signed installer" });
+  const finish = readFileSync(new URL("./finish.mjs", import.meta.url), "utf8");
+  assert.match(finish, /"offlineInstaller"/);
+  assert.match(finish, /"embedBootstrapper"/);
+  assert.match(finish, /filename: updateFilename/);
+  assert.match(finish, /verifyUpdate\(policyBytes/);
 });
 test("manifest requires a version-bound signer output, never an arbitrary path or URL", () => {
   const signature = Buffer.from("untrusted comment: signature\nRWtest\ntrusted comment: timestamp:1\tfile:installer\tversion:0.3.1\ntrusted-signature\n").toString("base64");

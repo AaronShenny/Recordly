@@ -23,19 +23,38 @@ export function repository(value) {
 export function feedFor(repo) {
   return `https://github.com/${repository(repo)}/releases/latest/download/latest.json`;
 }
+export function githubFeed(feed) {
+  const prefix = "https://github.com/", suffix = "/releases/latest/download/latest.json";
+  if (typeof feed !== "string" || !feed.startsWith(prefix) || !feed.endsWith(suffix) ||
+      feedFor(feed.slice(prefix.length, -suffix.length)) !== feed) {
+    throw new Error("Updates must use this repository's GitHub Releases feed.");
+  }
+  return feed;
+}
+export function updatePriority(value = "normal") {
+  if (!["normal", "high"].includes(value)) throw new Error("Update priority must be normal or high.");
+  return value;
+}
+export function priorityPolicy(release, priority = "normal") {
+  const asset = release.platforms["windows-x86_64"];
+  return { schemaVersion: 1, version: release.version, priority: updatePriority(priority),
+    installerUrl: asset.url, installerSignature: asset.signature };
+}
 export function releaseConfiguration(env) {
   const feed = env.RECORD_MAKER_TAURI_UPDATE_URL || null;
   const publicKey = env.RECORD_MAKER_TAURI_PUBLIC_KEY || null;
   const publisherNames = (env.RECORD_MAKER_PUBLISHER_NAME || "").split(";").map(s => s.trim()).filter(Boolean);
   if (!feed) return { feed, publicKey, publisherNames };
+  githubFeed(feed);
   const url = new URL(feed);
   if (url.protocol !== "https:" || url.username || url.password || !publicKey || !publisherNames.length) {
     throw new Error("Updates require an HTTPS feed, public key and approved publisher names.");
   }
   return { feed, publicKey, publisherNames };
 }
-export function manifest({ version, repo, filename, signature }) {
-  if (!/^\d+\.\d+\.\d+$/.test(version) || filename !== `Recordly-${version}-x64-setup.exe`) {
+export function manifest({ version, repo, filename, signature, signedPolicy }) {
+  if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version) ||
+      ![`Recordly-${version}-x64-setup.exe`, `Recordly-${version}-x64-update.exe`].includes(filename)) {
     throw new Error("Invalid release version or installer name.");
   }
   // Tauri's signer emits base64-encoded minisign text, not a URL/path.
@@ -45,6 +64,7 @@ export function manifest({ version, repo, filename, signature }) {
     throw new Error("The installer needs a version-bound Tauri signature.");
   }
   return {
+    ...(signedPolicy ? { recordly: signedPolicy } : {}),
     version, notes: `Recordly ${version}. See the release notes and code signing policy.`,
     pub_date: new Date().toISOString(),
     platforms: { "windows-x86_64": {

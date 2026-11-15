@@ -1,9 +1,10 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { appRoot, versionOf, repository, feedFor, releaseConfiguration } from "./config.mjs";
+import { appRoot, versionOf, repository, feedFor, releaseConfiguration, updatePriority } from "./config.mjs";
 
 const version = versionOf();
+updatePriority(process.env.RECORDLY_UPDATE_PRIORITY || "normal");
 if (process.env.RELEASE_VERSION !== version) throw new Error("Input version does not match the checked-out source.");
 const repo = repository(process.env.GITHUB_REPOSITORY);
 const head = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();

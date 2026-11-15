@@ -6,6 +6,14 @@ on:
         description: 'Existing protected release tag version, without v'
         required: true
         type: string
+      priority:
+        description: 'High priority updates run before record screens; failed downloads allow continued work'
+        required: true
+        default: normal
+        type: choice
+        options:
+          - normal
+          - high
 permissions:
   contents: read
   actions: read
@@ -19,6 +27,7 @@ jobs:
     environment: recordly-release
     env:
       RELEASE_VERSION: ${{ inputs.version }}
+      RECORDLY_UPDATE_PRIORITY: ${{ inputs.priority }}
       SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
       SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
       SIGNPATH_SIGNING_POLICY_SLUG: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}

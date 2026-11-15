@@ -106,11 +106,30 @@ test("native sync timer runs every three minutes and stays independent of render
   try {
     const fake: any = { backgroundStarted: false, account: {}, updates: {}, sync: {}, documents: {} };
     HostWorkflows.prototype.startBackground.call(fake);
-    assert.deepEqual(intervals, [180_000, 6 * 60 * 60_000]);
-    assert.equal(delay, 60_000, "updates stay out of the first-screen startup path");
+    assert.deepEqual(intervals, [180_000, 15 * 60_000]);
+    assert.equal(delay, 5_000, "normal downloads start after the first screen reports readiness");
     HostWorkflows.prototype.startBackground.call(fake);
     assert.equal(intervals.length, 2, "background tasks are not installed twice");
   } finally { timer.mock.restore(); timeout.mock.restore(); }
+});
+
+test("update restart never installs before Drive acknowledgment or during document work", async () => {
+  let installed = 0, paused = 0;
+  const fake: any = { canWork: true, changing: false, host: {}, documents: { busy: 0 },
+    updates: { status: () => ({ state: "downloaded" }), restart: () => { installed++; } },
+    store: { load: async () => ({}) }, sync: {
+      sync: async () => {}, invalidateStatus: async () => {},
+      status: async () => ({ pending: true, state: "offline" }), pause: async () => { paused++; },
+    } };
+  await assert.rejects(() => HostWorkflows.prototype.run.call(fake, "restart-update", {}), /Save to Drive/);
+  assert.equal(installed, 0); assert.equal(paused, 0); assert.equal(fake.changing, false);
+  fake.sync.status = async () => ({ pending: false, state: "synced" });
+  fake.documents.busy = 1;
+  await assert.rejects(() => HostWorkflows.prototype.run.call(fake, "restart-update", {}), /Finish document/);
+  assert.equal(installed, 0);
+  fake.documents.busy = 0;
+  await HostWorkflows.prototype.run.call(fake, "restart-update", {});
+  assert.equal(installed, 1); assert.equal(paused, 1);
 });
 
 test("reading update status does not start a download or require an unlocked workspace", async () => {

@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { verifyUpdate } from "./verify-update.mjs";
+import { readFileSync } from "node:fs";
 
 // Ephemeral test-only keys. Never generated for or reused by production releases.
 function fixture() {
@@ -28,4 +29,12 @@ test("release verifier checks installer bytes, public key and authenticated vers
   for (const bad of ["https://host/key", "bad", Buffer.from("untrusted comment: fake").toString("base64")]) {
     assert.throws(() => verifyUpdate(f.bytes, bad, f.signature, "0.3.1"));
   }
+});
+test("Rust and release tooling accept the same signed priority and installer fixture", () => {
+  const fixture = JSON.parse(readFileSync(new URL("../../tauri/src-tauri/tests/fixtures/update-policy.json", import.meta.url), "utf8"));
+  const bytes = Buffer.from(fixture.recordly.payload, "base64");
+  const policy = JSON.parse(bytes);
+  assert.equal(verifyUpdate(bytes, fixture.key, fixture.recordly.signature, "0.4.0"), true);
+  assert.equal(verifyUpdate(Buffer.from(fixture.installer), fixture.key, policy.installerSignature, "0.4.0"), true);
+  assert.throws(() => verifyUpdate(Buffer.from(JSON.stringify({ ...policy, priority: "normal" })), fixture.key, fixture.recordly.signature, "0.4.0"));
 });
