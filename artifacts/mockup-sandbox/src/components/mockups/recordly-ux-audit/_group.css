@@ -1,0 +1,250 @@
+@font-face{font-family:'DM Sans';font-style:normal;font-weight:400;font-display:swap;src:url('/__mockup/fonts/recordly-audit/dm-sans-latin-400-normal.woff2') format('woff2');}
+@font-face{font-family:'DM Sans';font-style:normal;font-weight:500;font-display:swap;src:url('/__mockup/fonts/recordly-audit/dm-sans-latin-500-normal.woff2') format('woff2');}
+@font-face{font-family:'DM Sans';font-style:normal;font-weight:600;font-display:swap;src:url('/__mockup/fonts/recordly-audit/dm-sans-latin-600-normal.woff2') format('woff2');}
+@font-face{font-family:'DM Sans';font-style:normal;font-weight:700;font-display:swap;src:url('/__mockup/fonts/recordly-audit/dm-sans-latin-700-normal.woff2') format('woff2');}
+@font-face{font-family:'DM Mono';font-style:normal;font-weight:400;font-display:swap;src:url('/__mockup/fonts/recordly-audit/dm-mono-latin-400-normal.woff2') format('woff2');}
+@font-face{font-family:'DM Mono';font-style:normal;font-weight:500;font-display:swap;src:url('/__mockup/fonts/recordly-audit/dm-mono-latin-500-normal.woff2') format('woff2');}
+@font-face{font-family:'Newsreader';font-style:normal;font-weight:500;font-display:swap;src:url('/__mockup/fonts/recordly-audit/newsreader-latin-500-normal.woff2') format('woff2');}
+@font-face{font-family:'Newsreader';font-style:normal;font-weight:600;font-display:swap;src:url('/__mockup/fonts/recordly-audit/newsreader-latin-600-normal.woff2') format('woff2');}
+:root {
+  --button-outline: rgba(0, 0, 0, 0.1);
+  --badge-outline: rgba(0, 0, 0, 0.05);
+
+  /* Automatic computation of border around primary / danger buttons */
+  --opaque-button-border-intensity: -8; /* In terms of percentages */
+
+  /* Backgrounds applied on top of other backgrounds when hovered/active */
+  --elevate-1: rgba(0, 0, 0, 0.03);
+  --elevate-2: rgba(0, 0, 0, 0.08);
+
+  --background: 45 33% 93%;
+
+  --foreground: 192 20% 16%;
+
+  --border: 60 11% 82%;
+
+  --card: 45 100% 98%;
+
+  --card-foreground: 192 20% 16%;
+
+  --card-border: 60 11% 82%;
+
+  --sidebar: 53 18% 88%;
+
+  --sidebar-foreground: 192 20% 16%;
+
+  --sidebar-border: 60 11% 82%;
+
+  --sidebar-primary: 176 40% 26%;
+
+  --sidebar-primary-foreground: 45 100% 98%;
+
+  --sidebar-accent: 45 100% 98%;
+
+  --sidebar-accent-foreground: 178 42% 20%;
+
+  --sidebar-ring: 14 53% 44%;
+
+  --popover: 45 100% 98%;
+
+  --popover-foreground: 192 20% 16%;
+
+  --popover-border: 60 11% 82%;
+
+  --primary: 176 40% 26%;
+
+  --primary-foreground: 45 100% 98%;
+
+  --secondary: 50 18% 89%;
+
+  --secondary-foreground: 192 20% 16%;
+
+  --muted: 50 18% 89%;
+
+  --muted-foreground: 191 9% 44%;
+
+  --accent: 158 22% 89%;
+
+  --accent-foreground: 178 42% 20%;
+
+  --destructive: 14 53% 44%;
+
+  --destructive-foreground: 45 100% 98%;
+
+  --input: 80 9% 81%;
+  --ring: 14 53% 44%;
+  --chart-1: 176 40% 26%;
+  --chart-2: 14 53% 44%;
+  --chart-3: 41 62% 58%;
+  --chart-4: 204 24% 46%;
+  --chart-5: 158 22% 60%;
+
+  --app-font-sans: 'DM Sans', sans-serif;
+  --app-font-serif: 'Newsreader', Georgia, serif;
+  --app-font-mono: 'DM Mono', Menlo, monospace;
+  --radius: 0.5rem; /* 8px */
+  --shadow-2xs: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0); /*replace with H S L */
+  --shadow-xs: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0); /*replace with H S L */
+  --shadow-sm:
+    0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0),
+    0px 1px 2px -1px hsl(202.8169 89.1213% 53.1373% / 0);
+  --shadow:
+    0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0),
+    0px 1px 2px -1px hsl(202.8169 89.1213% 53.1373% / 0);
+  --shadow-md:
+    0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0),
+    0px 2px 4px -1px hsl(202.8169 89.1213% 53.1373% / 0);
+  --shadow-lg:
+    0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0),
+    0px 4px 6px -1px hsl(202.8169 89.1213% 53.1373% / 0);
+  --shadow-xl:
+    0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0),
+    0px 8px 10px -1px hsl(202.8169 89.1213% 53.1373% / 0);
+  --shadow-2xl: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0);
+  --tracking-normal: 0em;
+  --spacing: 0.25rem;
+
+  /* Automatically computed borders - intensity can be controlled by the user by the --opaque-button-border-intensity setting */
+
+  /* Fallback for older browsers */
+  --sidebar-primary-border: hsl(var(--sidebar-primary));
+  --sidebar-primary-border: hsl(
+    from hsl(var(--sidebar-primary)) h s
+      calc(l + var(--opaque-button-border-intensity)) / alpha
+  );
+
+  /* Fallback for older browsers */
+  --sidebar-accent-border: hsl(var(--sidebar-accent));
+  --sidebar-accent-border: hsl(
+    from hsl(var(--sidebar-accent)) h s
+      calc(l + var(--opaque-button-border-intensity)) / alpha
+  );
+
+  /* Fallback for older browsers */
+  --primary-border: hsl(var(--primary));
+  --primary-border: hsl(
+    from hsl(var(--primary)) h s
+      calc(l + var(--opaque-button-border-intensity)) / alpha
+  );
+
+  /* Fallback for older browsers */
+  --secondary-border: hsl(var(--secondary));
+  --secondary-border: hsl(
+    from hsl(var(--secondary)) h s
+      calc(l + var(--opaque-button-border-intensity)) / alpha
+  );
+
+  /* Fallback for older browsers */
+  --muted-border: hsl(var(--muted));
+  --muted-border: hsl(
+    from hsl(var(--muted)) h s calc(l + var(--opaque-button-border-intensity)) /
+      alpha
+  );
+
+  /* Fallback for older browsers */
+  --accent-border: hsl(var(--accent));
+  --accent-border: hsl(
+    from hsl(var(--accent)) h s
+      calc(l + var(--opaque-button-border-intensity)) / alpha
+  );
+
+  /* Fallback for older browsers */
+  --destructive-border: hsl(var(--destructive));
+  --destructive-border: hsl(
+    from hsl(var(--destructive)) h s
+      calc(l + var(--opaque-button-border-intensity)) / alpha
+  );
+}
+.dark {
+  --button-outline: rgba(255, 255, 255, 0.1);
+  --badge-outline: rgba(255, 255, 255, 0.05);
+
+  --opaque-button-border-intensity: 9; /* In terms of percentages */
+
+  /* Backgrounds applied on top of other backgrounds when hovered/active */
+  --elevate-1: rgba(255, 255, 255, 0.04);
+  --elevate-2: rgba(255, 255, 255, 0.09);
+
+  --background: 45 33% 93%;
+
+  --foreground: 192 20% 16%;
+
+  --border: 60 11% 82%;
+
+  --card: 45 100% 98%;
+
+  --card-foreground: 192 20% 16%;
+
+  --card-border: 60 11% 82%;
+
+  --sidebar: 53 18% 88%;
+
+  --sidebar-foreground: 192 20% 16%;
+
+  --sidebar-border: 60 11% 82%;
+
+  --sidebar-primary: 176 40% 26%;
+
+  --sidebar-primary-foreground: 45 100% 98%;
+
+  --sidebar-accent: 45 100% 98%;
+
+  --sidebar-accent-foreground: 178 42% 20%;
+
+  --sidebar-ring: 14 53% 44%;
+
+  --popover: 45 100% 98%;
+
+  --popover-foreground: 192 20% 16%;
+
+  --popover-border: 60 11% 82%;
+
+  --primary: 176 40% 26%;
+
+  --primary-foreground: 45 100% 98%;
+
+  --secondary: 50 18% 89%;
+
+  --secondary-foreground: 192 20% 16%;
+
+  --muted: 50 18% 89%;
+
+  --muted-foreground: 191 9% 44%;
+
+  --accent: 158 22% 89%;
+
+  --accent-foreground: 178 42% 20%;
+
+  --destructive: 14 53% 44%;
+
+  --destructive-foreground: 45 100% 98%;
+
+  /* Used as the border around inputs. Dark mode: Should be a border that is light enough to have high contrast when rendered on a --card background. More contrast than standard --border */
+  --input: 80 9% 81%;
+  --ring: 14 53% 44%;
+  --chart-1: 176 40% 26%;
+  --chart-2: 14 53% 44%;
+  --chart-3: 41 62% 58%;
+  --chart-4: 204 24% 46%;
+  --chart-5: 158 22% 60%;
+
+  --shadow-2xs: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0);
+  --shadow-xs: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0);
+  --shadow-sm:
+    0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0),
+    0px 1px 2px -1px hsl(202.8169 89.1213% 53.1373% / 0);
+  --shadow:
+    0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0),
+    0px 1px 2px -1px hsl(202.8169 89.1213% 53.1373% / 0);
+  --shadow-md:
+    0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0),
+    0px 2px 4px -1px hsl(202.8169 89.1213% 53.1373% / 0);
+  --shadow-lg:
+    0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0),
+    0px 4px 6px -1px hsl(202.8169 89.1213% 53.1373% / 0);
+  --shadow-xl:
+    0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0),
+    0px 8px 10px -1px hsl(202.8169 89.1213% 53.1373% / 0);
+  --shadow-2xl: 0px 2px 0px 0px hsl(202.8169 89.1213% 53.1373% / 0);
+}
+.audit-preview-note{position:fixed;bottom:8px;left:12px;z-index:90;padding:5px 9px;border:1px solid #d7d7cc;border-radius:5px;background:#fffdf7;color:#47595a;font:10px 'DM Sans',sans-serif;box-shadow:0 1px 5px #202d3010;pointer-events:none;}
